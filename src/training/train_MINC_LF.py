@@ -292,6 +292,10 @@ parser.add_argument('--outf',
     default='tmp', 
     help='folder to output images and model checkpoints, it will \
     add a train_ in front of the name')
+parser.add_argument('--batchsize', 
+    type=int, 
+    default=32, 
+    help='input batch size')
 # Read the config but do not overwrite the args written 
 args, remaining_argv = conf_parser.parse_known_args()
 defaults = { "option":"default" }
