@@ -183,30 +183,30 @@ def load_module_npy(module, data):
                 child.bias.data.copy_(bias)
 
 
-def loadimages(root, format):
-    """
-    Find all the images in the path and folders, return them in imgs. 
-    """
-    imgs = []
-
-    def add_img_files(path):
-        for imgpath in glob.glob(path+"/*."+format):
-            if exists(imgpath):
-                imgs.append(imgpath)
-
-    def explore(path):
-        if not os.path.isdir(path):
-            return
-        folders = [os.path.join(path, o) for o in os.listdir(path) 
-                        if os.path.isdir(os.path.join(path,o))]
-        if len(folders)>0:
-            for path_entry in folders:                
-                explore(path_entry)
-        else:
-            add_img_files(path)
-
-    explore(root)
-    return imgs
+# def loadimages(root, format):
+#     """
+#     Find all the images in the path and folders, return them in imgs.
+#     """
+#     imgs = []
+#
+#     def add_img_files(path):
+#         for imgpath in glob.glob(path+"/*."+format):
+#             if exists(imgpath):
+#                 imgs.append(imgpath)
+#
+#     def explore(path):
+#         if not os.path.isdir(path):
+#             return
+#         folders = [os.path.join(path, o) for o in os.listdir(path)
+#                         if os.path.isdir(os.path.join(path,o))]
+#         if len(folders)>0:
+#             for path_entry in folders:
+#                 explore(path_entry)
+#         else:
+#             add_img_files(path)
+#
+#     explore(root)
+#     return imgs
 
 class Loadpatch(data.Dataset):
     def __init__(self,root,img_format='png',transform=None, num_class=12):
@@ -236,13 +236,22 @@ class Loadpatch(data.Dataset):
         return len(self.imgs)   
 
     def __getitem__(self, index):
-        
-        img_path = self.imgs.iloc[index,0].replace('/media/logan/data/','/opt/')
+
+        with open(self.imgs.iloc[index, 0].replace('/media/logan/data/', '/opt/')) as data_file:
+            json_read = json.load(data_file)
+        img_path = json_read['image_path'].replace('/media/logan/data/', '/opt/')
+        image_size = json_read['image_size']
+        angular_res = json_read['angular_res']
+
         image = Image.open(img_path).convert('RGB')
-        label = np.array([self.imgs.iloc[index,1].astype('int')-1])
+        crop_index = json_read['crop_data'][self.imgs.iloc[index,1]-1]
+        cropped = image.crop((crop_index[1]*angular_res,crop_index[0]*angular_res,
+                              crop_index[1]*angular_res+image_size*angular_res,
+                              crop_index[0]*angular_res+image_size*angular_res))
+        label = np.array([self.imgs.iloc[index,2].astype('int')-1])
         # label = np.zeros(self.num_class).astype(float)
         # label[label_temp] = 1.0
-        sample = {'image': image, 'label': label}
+        sample = {'image': cropped, 'label': label}
 
         if self.transform:
             sample = self.transform(sample)
