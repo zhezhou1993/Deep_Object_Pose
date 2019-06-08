@@ -252,6 +252,26 @@ class ModelData(object):
 class ObjectDetector(object):
     '''This class contains methods for object detection'''
 
+
+
+    @staticmethod
+    def retrive_belief_map(net_model,in_img):
+        if in_img is None:
+            return []
+
+        # Run network inference
+        image_tensor = transform(in_img)
+        image_torch = Variable(image_tensor).cuda().unsqueeze(0)
+        out, seg = net_model(image_torch)
+        beliefs = out[-1][0]
+
+
+
+
+        # Find objects from network output
+        # detected_objects = ObjectDetector.find_object_poses(vertex2, aff, pnp_solver, config)
+
+        return beliefs, image_torch
     @staticmethod
     def detect_object_in_image(net_model, pnp_solver, in_img, config):
         '''Detect objects in a image using a specific trained network model'''

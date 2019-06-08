@@ -18,12 +18,12 @@ import os
 import numpy as np
 import cv2
 
-import rospy
-import rospkg
-from std_msgs.msg import String, Empty
-from cv_bridge import CvBridge, CvBridgeError
-from sensor_msgs.msg import Image as ImageSensor_msg
-from geometry_msgs.msg import PoseStamped
+# import rospy
+# import rospkg
+# from std_msgs.msg import String, Empty
+# from cv_bridge import CvBridge, CvBridgeError
+# from sensor_msgs.msg import Image as ImageSensor_msg
+# from geometry_msgs.msg import PoseStamped
 
 from PIL import Image
 from PIL import ImageDraw
@@ -32,23 +32,24 @@ import torch
 import torchvision.transforms as transforms
 import math
 # Import DOPE code
-rospack = rospkg.RosPack()
-g_path2package = rospack.get_path('dope')
+# rospack = rospkg.RosPack()
+# g_path2package = rospack.get_path('dope')
+g_path2package = '/opt/project'
 sys.path.append("{}/src/inference".format(g_path2package))
 from cuboid import *
 from detector import *
 
 ### Global Variables
-g_bridge = CvBridge()
+# g_bridge = CvBridge()
 g_img = None
 g_draw = None
 
 
 ### Basic functions
-def __image_callback(msg):
-    '''Image callback'''
-    global g_img
-    g_img = g_bridge.imgmsg_to_cv2(msg, "rgb8")
+# def __image_callback(msg):
+#     '''Image callback'''
+#     global g_img
+#     g_img = g_bridge.imgmsg_to_cv2(msg, "rgb8")
     # cv2.imwrite('img.png', cv2.cvtColor(g_img, cv2.COLOR_BGR2RGB))  # for debugging
 
 
@@ -108,8 +109,6 @@ def DrawCube(points, color=(255, 0, 0)):
     # draw x on the top 
     DrawLine(points[0], points[5], color, lineWidthForDrawing)
     DrawLine(points[1], points[4], color, lineWidthForDrawing)
-
-
 def OverlayBeliefOnImage(img, beliefs, name, path="", factor=0.7, grid=3,
                          norm_belief=True):
     """ python
@@ -313,18 +312,18 @@ def run_dope_node(params, freq=5, overlaybelief=False):
                 Cuboid3d(params['dimensions'][model]),
                 dist_coeffs=dist_coeffs
             )
-        pubs[model] = \
-            rospy.Publisher(
-                '{}/pose_{}'.format(params['topic_publishing'], model), 
-                PoseStamped, 
-                queue_size=10
-            )
-        pub_dimension[model] = \
-            rospy.Publisher(
-                '{}/dimension_{}'.format(params['topic_publishing'], model),
-                String, 
-                queue_size=10
-            )
+        # pubs[model] = \
+        #     rospy.Publisher(
+        #         '{}/pose_{}'.format(params['topic_publishing'], model),
+        #         PoseStamped,
+        #         queue_size=10
+        #     )
+        # pub_dimension[model] = \
+        #     rospy.Publisher(
+        #         '{}/dimension_{}'.format(params['topic_publishing'], model),
+        #         String,
+        #         queue_size=10
+        #     )
 
     # Start ROS publisher
     # pub_rgb_dope_points = \
@@ -342,8 +341,8 @@ def run_dope_node(params, freq=5, overlaybelief=False):
     # )
 
     # Initialize ROS node
-    rospy.init_node('dope_save_to_file', anonymous=True)
-    rate = rospy.Rate(freq)
+    # rospy.init_node('dope_save_to_file', anonymous=True)
+    # rate = rospy.Rate(freq)
 
     print ("Running DOPE...  (Processing the folder: '{}')".format(params['image_folder'])) 
     print ("Ctrl-C to stop")
@@ -351,6 +350,7 @@ def run_dope_node(params, freq=5, overlaybelief=False):
     # while not rospy.is_shutdown():
         # if g_img is not None:
     for sub_ap_img in img_path:
+        print(sub_ap_img)
         # Copy and draw image
 
         # g_img = cv2.imread(sub_ap_img)
@@ -369,13 +369,14 @@ def run_dope_node(params, freq=5, overlaybelief=False):
                 OverlayBeliefOnImage(img_tensor, belief_tensor, name=(sub_ap_img[:-4] + 'beliefmap.png'), factor=0.5)
 
 
+
             else:
                 results = ObjectDetector.detect_object_in_image(
-                            models[m].net,
-                            pnp_solvers[m],
-                            g_img,
-                            config_detect
-                            )
+                    models[m].net,
+                    pnp_solvers[m],
+                    g_img,
+                    config_detect
+                )
                 # Publish pose and overlay cube on image
                 for i_r, result in enumerate(results):
                     if result["location"] is None:
@@ -389,8 +390,6 @@ def run_dope_node(params, freq=5, overlaybelief=False):
                             points2d.append(tuple(pair))
                         DrawCube(points2d, draw_colors[m])
             # cv2.imwrite(sub_ap_img[:-4] + 'result.png', cv2.cvtColor(np.array(im),cv2.COLOR_BGR2RGB))
-              
-
 
 if __name__ == "__main__":
     '''Main routine to run DOPE'''
@@ -399,7 +398,7 @@ if __name__ == "__main__":
         config_name = sys.argv[1]
     else:
         config_name = "config_pose.yaml"
-    rospack = rospkg.RosPack()
+    # rospack = rospkg.RosPack()
     params = None
     yaml_path = g_path2package + '/config/{}'.format(config_name)
     with open(yaml_path, 'r') as stream:
@@ -412,7 +411,6 @@ if __name__ == "__main__":
 
     topic_cam = params['topic_camera']
 
-    try :
-        run_dope_node(params,overlaybelief=params['overlaybelief'])
-    except rospy.ROSInterruptException:
-        pass
+ 
+    run_dope_node(params,overlaybelief=params['overlaybelief'])
+

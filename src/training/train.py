@@ -636,7 +636,9 @@ class MultipleVertexJson(data.Dataset):
         totensor = transforms.Compose([transforms.ToTensor()])
 
         for j in range(len(beliefsImg)):
+            # for debug use comment the line
             beliefsImg[j] = self.target_transform(beliefsImg[j])
+
             # beliefsImg[j].save('{}.png'.format(j))
             beliefsImg[j] = totensor(beliefsImg[j])
 
@@ -652,6 +654,7 @@ class MultipleVertexJson(data.Dataset):
             scale = min (img.size)/(min (img_size)/8.0)
 
         affinities = GenerateMapAffinity(img,8,pointsBelief,objects_centroid,scale)
+        # for debug use comment the line
         img = self.transform(img)
 
         # Transform the images for training input
@@ -667,16 +670,18 @@ class MultipleVertexJson(data.Dataset):
                 AddNoise(self.noise)])
         else:
             normalize = transforms.Compose([AddNoise(0.0001)])
-        
+        # for debug use comment the line
         img = crop(img,h_crop,w_crop,img_size[1],img_size[0])
         img = totensor(img)
 
+        # for debug use comment the line
         img = normalize(img)
 
         w_crop = int(w_crop/8)
         h_crop = int(h_crop/8)
 
         affinities = affinities[:,h_crop:h_crop+int(img_size[1]/8),w_crop:w_crop+int(img_size[0]/8)]
+        # for debug use comment the line
         beliefs = beliefs[:,h_crop:h_crop+int(img_size[1]/8),w_crop:w_crop+int(img_size[0]/8)]
 
         if affinities.size()[1] == 49 and not self.test:
@@ -1006,7 +1011,48 @@ def make_grid(tensor, nrow=8, padding=2,
             k = k + 1
     return grid
 
+def OverlayBeliefOnImage(img, beliefs, name, path="", factor=0.7, grid=3, 
+        norm_belief = True):
+    """ python
+    take as input 
+    img: a tensor image in pytorch normalized at 0.5
+            1x3xwxh
+    belief: tensor of the same size as the image to overlay over img 
+            1xnb_beliefxwxh
+    name: str to name the image, e.g., output.png
+    path: where to save, e.g., /where/to/save/
+    factor: float [0,1] how much to keep the original, 1 = fully, 0 black
+    grid: how big the grid, e.g., 3 wide. 
+    norm_belief: bool to normalize the values [0,1]
+    """
 
+    tensor = torch.squeeze(beliefs)
+    belief_imgs = []
+    in_img = torch.squeeze(img)
+    transform = transforms.Compose([transforms.ToPILImage(), transforms.Resize(in_img.size()[2]), transforms.ToTensor()])
+    in_img *= factor           
+    norm_belief = True
+    for j in range(tensor.size()[0]):
+        belief = tensor[j].clone()
+        belief = torch.squeeze(transform(belief.unsqueeze(0)))
+        if norm_belief:
+            belief -= float(torch.min(belief).data.cpu().numpy())
+            belief /= float(torch.max(belief).data.cpu().numpy())
+        belief = torch.clamp(belief,0,1).cpu()
+        belief = torch.cat([
+                    belief.unsqueeze(0) + in_img[0,:,:],
+                    belief.unsqueeze(0) + in_img[1,:,:],
+                    belief.unsqueeze(0) + in_img[2,:,:]
+                    ]).unsqueeze(0)
+        belief = torch.clamp(belief,0,1) 
+
+        belief_imgs.append(belief.data.squeeze().numpy())
+
+    # Create the image grid
+    belief_imgs = torch.tensor(np.array(belief_imgs))
+
+    save_image(belief_imgs, "{}{}".format(path, name), 
+        mean=0, std=1, nrow=grid)
 def save_image(tensor, filename, nrow=4, padding=2,mean=None, std=None):
     """
     Saves a given Tensor into an image file.
@@ -1180,6 +1226,11 @@ parser.add_argument('--datasize',
     default=None, 
     help='randomly sample that number of entries in the dataset folder') 
 
+parser.add_argument('--savebelief', 
+    action="store_true", 
+    help='save a visual batch with belief and quit, this is for\
+    debugging purposes')
+
 # Read the config but do not overwrite the args written 
 args, remaining_argv = conf_parser.parse_known_args()
 defaults = { "option":"default" }
@@ -1274,6 +1325,18 @@ if opt.save:
         print (i)        
 
     print ('things are saved in {}'.format(opt.outf))
+    quit()
+
+if opt.savebelief:
+    for i in range(2):
+        images = iter(trainingdata).next()
+        if normal_imgs is None:
+            normal_imgs = [0,1]
+        # save_image(images['img'],'{}/train_{}.png'.format( opt.outf,str(i).zfill(5)),mean=normal_imgs[0],std=normal_imgs[1])
+        OverlayBeliefOnImage(images['img'],images['beliefs'],'output.png','/opt/project/src/',factor=0.5)
+        print (i)        
+
+    print ('overlap belief are saved ')
     quit()
 
 testingdata = None
