@@ -292,7 +292,6 @@ def loadjson(path, objectsofinterest, img):
         if not objectsofinterest is None and \
            not objectsofinterest in info['class'].lower():
             continue 
-        
         box = info['bounding_box']
         boxToAdd = []
 
@@ -1029,30 +1028,32 @@ def OverlayBeliefOnImage(img, beliefs, name, path="", factor=0.7, grid=3,
     tensor = torch.squeeze(beliefs)
     belief_imgs = []
     in_img = torch.squeeze(img)
-    transform = transforms.Compose([transforms.ToPILImage(), transforms.Resize(in_img.size()[2]), transforms.ToTensor()])
-    in_img *= factor           
+    transform = transforms.Compose(
+        [transforms.ToPILImage(), transforms.Resize([in_img.size()[1], in_img.size()[2]]), transforms.ToTensor()])
+    in_img *= factor
     norm_belief = True
     for j in range(tensor.size()[0]):
         belief = tensor[j].clone()
-        belief = torch.squeeze(transform(belief.unsqueeze(0)))
         if norm_belief:
             belief -= float(torch.min(belief).data.cpu().numpy())
             belief /= float(torch.max(belief).data.cpu().numpy())
-        belief = torch.clamp(belief,0,1).cpu()
+        belief = torch.clamp(belief, 0, 1).cpu()
+        belief = torch.squeeze(transform(belief.unsqueeze(0)))
         belief = torch.cat([
-                    belief.unsqueeze(0) + in_img[0,:,:],
-                    belief.unsqueeze(0) + in_img[1,:,:],
-                    belief.unsqueeze(0) + in_img[2,:,:]
-                    ]).unsqueeze(0)
-        belief = torch.clamp(belief,0,1) 
+            belief.unsqueeze(0) + in_img[0, :, :],
+            belief.unsqueeze(0) + in_img[1, :, :],
+            belief.unsqueeze(0) + in_img[2, :, :]
+        ]).unsqueeze(0)
+        belief = torch.clamp(belief, 0, 1).cpu()
 
         belief_imgs.append(belief.data.squeeze().numpy())
 
     # Create the image grid
     belief_imgs = torch.tensor(np.array(belief_imgs))
 
-    save_image(belief_imgs, "{}{}".format(path, name), 
-        mean=0, std=1, nrow=grid)
+    save_image(belief_imgs, "{}{}".format(path, name),
+               mean=0, std=1, nrow=grid)
+               
 def save_image(tensor, filename, nrow=4, padding=2,mean=None, std=None):
     """
     Saves a given Tensor into an image file.
@@ -1230,6 +1231,9 @@ parser.add_argument('--savebelief',
     action="store_true", 
     help='save a visual batch with belief and quit, this is for\
     debugging purposes')
+parser.add_argument('--beliefpath',  
+    default = "/opt/project/path/", 
+    help='path to save beliefmap data')
 
 # Read the config but do not overwrite the args written 
 args, remaining_argv = conf_parser.parse_known_args()
@@ -1333,7 +1337,7 @@ if opt.savebelief:
         if normal_imgs is None:
             normal_imgs = [0,1]
         # save_image(images['img'],'{}/train_{}.png'.format( opt.outf,str(i).zfill(5)),mean=normal_imgs[0],std=normal_imgs[1])
-        OverlayBeliefOnImage(images['img'],images['beliefs'],'output.png','/opt/project/src/',factor=0.5)
+        OverlayBeliefOnImage(images['img'],images['beliefs'],'output.png',opt.beliefpath,factor=0.5)
         print (i)        
 
     print ('overlap belief are saved ')

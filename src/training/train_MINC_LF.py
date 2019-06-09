@@ -132,7 +132,7 @@ class LF_MINC(nn.Module):
         # current_layer_id = len(self.vgg_full._modules) + 2
         self.classifier = models.vgg16(pretrained=False).classifier
         classifier_temp = list(self.classifier.children())[:-1] # Remove last layer
-        classifier_temp.extend([nn.Linear(4096, class_num)]) # Add our layer with 12 outputs
+        classifier_temp.extend([nn.Linear(4096, class_num)]) # Add our layer
         self.classifier = nn.Sequential(*classifier_temp) # Replace the model classifier
 
         # self.classifer.add_module(str(current_layer_id), nn.Linear(512 * 7 * 7,4096))
@@ -237,18 +237,20 @@ class Loadpatch(data.Dataset):
 
     def __getitem__(self, index):
 
-        with open(self.imgs.iloc[index, 0].replace('/media/logan/data/', '/opt/')) as data_file:
-            json_read = json.load(data_file)
-        img_path = json_read['image_path'].replace('/media/logan/data/', '/opt/')
-        image_size = json_read['image_size']
-        angular_res = json_read['angular_res']
+        # with open(self.imgs.iloc[index, 0].replace('/media/logan/data/', '/opt/')) as data_file:
+        #     json_read = json.load(data_file)
+        # img_path = json_read['image_path'].replace('/media/logan/data/', '/opt/')
+        # image_size = json_read['image_size']
+        # angular_res = json_read['angular_res']
 
-        image = Image.open(img_path).convert('RGB')
-        crop_index = json_read['crop_data'][self.imgs.iloc[index,1]-1]
-        cropped = image.crop((crop_index[1]*angular_res,crop_index[0]*angular_res,
-                              crop_index[1]*angular_res+image_size*angular_res,
-                              crop_index[0]*angular_res+image_size*angular_res))
-        label = np.array([self.imgs.iloc[index,2].astype('int')-1])
+        # image = Image.open(img_path).convert('RGB')
+        # crop_index = json_read['crop_data'][self.imgs.iloc[index,1]-1]
+        # cropped = image.crop((crop_index[1]*angular_res,crop_index[0]*angular_res,
+        #                       crop_index[1]*angular_res+image_size*angular_res,
+        #                       crop_index[0]*angular_res+image_size*angular_res))
+
+        cropped = Image.open(self.imgs.iloc[index,0]).convert('RGB')
+        label = np.array([self.imgs.iloc[index,1].astype('int')-1])
         # label = np.zeros(self.num_class).astype(float)
         # label[label_temp] = 1.0
         sample = {'image': cropped, 'label': label}
@@ -298,13 +300,27 @@ parser.add_argument('--epochs',
     default=60,
     help="number of epochs to train")
 parser.add_argument('--outf', 
-    default='tmp', 
+    default='/home/alienicp/pose_estimation_ws/src/dope/pre_trained_MINC', 
     help='folder to output images and model checkpoints, it will \
     add a train_ in front of the name')
 parser.add_argument('--batchsize', 
     type=int, 
     default=32, 
     help='input batch size')
+parser.add_argument('--numworks', 
+    type=int, 
+    default=8, 
+    help='input batch size')
+parser.add_argument('--mincpath',  
+    default='/home/alienicp/pose_estimation_ws/src/dope/pre_trained_MINC/minc_vgg16.npy', 
+    help='input batch size')
+parser.add_argument('--namefile', 
+    default='epoch', 
+    help="name to put on the file of the save weights")
+parser.add_argument('--numclass', 
+    type=int, 
+    default=12,  
+    help="name to put on the file of the save weights")
 # Read the config but do not overwrite the args written 
 args, remaining_argv = conf_parser.parse_known_args()
 defaults = { "option":"default" }
@@ -314,7 +330,7 @@ parser.add_argument("--option")
 opt = parser.parse_args(remaining_argv)
 
 
-net = LF_MINC().cuda()
+net = LF_MINC(minc_path=opt.mincpath,class_num=opt.numclass).cuda()
 net = torch.nn.DataParallel(net,opt.gpuids).cuda()
 
 parameters = filter(lambda p: p.requires_grad, net.parameters())
@@ -323,8 +339,8 @@ optimizer = optim.Adam(parameters,lr=opt.lr)
 criterion = nn.CrossEntropyLoss()
 nb_update_network = 0
 
-train_dataset = Loadpatch(root=opt.root, transform=transforms.Compose([ToTensor()]))
-trainingdata = torch.utils.data.DataLoader(train_dataset, batch_size=4,
+train_dataset = Loadpatch(num_class=opt.numclass, root=opt.root, transform=transforms.Compose([ToTensor()]))
+trainingdata = torch.utils.data.DataLoader(train_dataset, batch_size=opt.batchsize,num_workers=opt.numworks,
                         shuffle=True)
 
 nb_update_network = 0
@@ -376,6 +392,7 @@ def _runnetwork(epoch, loader, train=True):
         #     file.write(s)
         running_loss += loss.item() * data.size(0)
         running_corrects += torch.sum(preds == target_label.data)
+        # print ('current running Loss: {:.4f}'.format(running_loss))
     epoch_loss = running_loss / len(train_dataset)
     epoch_acc = running_corrects.double() / len(train_dataset)
 
@@ -394,7 +411,7 @@ def _runnetwork(epoch, loader, train=True):
 
         # # break
         # if not opt.nbupdates is None and nb_update_network > int(opt.nbupdates):
-        #     torch.save(net.state_dict(), '{}/net_{}.pth'.format(opt.outf, opt.namefile))
+    torch.save(net.state_dict(), '{}/net_{}_{}.pth'.format(opt.outf, opt.namefile,epoch))
         #     break
 
 
