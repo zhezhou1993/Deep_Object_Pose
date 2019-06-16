@@ -1396,6 +1396,7 @@ def _runnetwork(epoch, loader, train=True):
     else:
         net.eval()
 
+    epoch_loss = 0
     for batch_idx, targets in enumerate(loader):
 
         data = Variable(targets['img'].cuda())
@@ -1448,12 +1449,13 @@ def _runnetwork(epoch, loader, train=True):
                 print('Test Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.15f}'.format(
                     epoch, batch_idx * len(data), len(loader.dataset),
                     100. * batch_idx / len(loader), loss.data[0]))
-
+        epoch_loss += loss.data[0]
         # break
         if not opt.nbupdates is None and nb_update_network > int(opt.nbupdates):
             torch.save(net.state_dict(), '{}/net_{}.pth'.format(opt.outf, opt.namefile))
             break
-
+    print('Epoch Lose: {} : {:.15f}'.format(
+                    epoch, (epoch_loss/ len(loader))))
 
 for epoch in range(1, opt.epochs + 1):
 
