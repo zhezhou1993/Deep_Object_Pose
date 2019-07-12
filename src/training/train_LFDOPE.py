@@ -668,8 +668,8 @@ class MultipleVertexJson(data.Dataset):
         # Create affinity maps
         scale = 8
         if min (img.size) / 8.0  != min (img_size)/8.0:
-            # print (scale)
             scale = min (img.size)/(min (img_size)/8.0)
+            # print (scale)
 
         affinities = GenerateMapAffinity(img,8,pointsBelief,objects_centroid,scale)
         # for debug use comment the line
@@ -677,8 +677,13 @@ class MultipleVertexJson(data.Dataset):
         lf_img = self.lf_transform(lf_img)
 
         # Transform the images for training input
-        w_crop = np.random.randint(0, img.size[0] - img_size[0]+1)
-        h_crop = np.random.randint(0, img.size[1] - img_size[1]+1)
+        # w_crop = np.random.randint(0, img.size[0] - img_size[0]+1)
+        # h_crop = np.random.randint(0, img.size[1] - img_size[1]+1)
+
+        # Crop begin at certain point match with matlab LF generation
+        w_crop = 88
+        h_crop = 0
+
         transform = transforms.Compose([transforms.Resize(min(img_size))])
         totensor = transforms.Compose([transforms.ToTensor()])
 
@@ -1255,6 +1260,10 @@ parser.add_argument('--savebelief',
 parser.add_argument('--beliefpath',  
     default = "/opt/project/path/", 
     help='path to save beliefmap data')
+
+parser.add_argument("--randomcrop",
+    default=False,
+    help='do you want to random crop when image get resized')
 
 # Read the config but do not overwrite the args written 
 args, remaining_argv = conf_parser.parse_known_args()
