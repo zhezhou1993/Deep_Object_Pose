@@ -116,10 +116,12 @@ class DopeNetwork(nn.Module):
         self.vgg = nn.Sequential()
 
         conv_temp = nn.Conv2d(3,64,kernel_size=angluar_res, stride=angluar_res,padding=0)
-        torch.nn.init.xavier_uniform(conv_temp.weight)
+        # torch.nn.init.xavier_uniform(conv_temp.weight)
         self.vgg.add_module('angular_filter', conv_temp)
         self.vgg.add_module('af_relu',nn.ReLU(inplace=True))
-
+        conv_temp = nn.Conv2d(64,64,kernel_size=3, stride=1,padding=1)
+        self.vgg.add_module('0', conv_temp)
+        self.vgg.add_module('1',nn.ReLU(inplace=True))
         for i_layer in range(24):
             if i_layer == 0 or i_layer == 1:
                 continue
