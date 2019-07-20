@@ -112,7 +112,7 @@ class DopeNetwork(nn.Module):
 
         self.stop_at_stage = stop_at_stage
 
-        vgg_full = models.vgg19(pretrained=pretrained).features
+        vgg_full = models.vgg19(pretrained=False).features
         self.vgg = nn.Sequential()
 
         conv_temp = nn.Conv2d(3,64,kernel_size=angluar_res, stride=angluar_res,padding=0)
@@ -359,8 +359,15 @@ def loadimages(root):
     def add_json_files(path,):
         for imgpath in glob.glob(path+"/*.Sub3_3.png"):
             if exists(imgpath) and exists(imgpath.replace('png',"json")):
-                imgs.append((imgpath,imgpath.replace(path,"").replace("/",""),imgpath.replace(".Sub3_3",""),
-                    imgpath.replace('png',"json")))   # centerview image, name, LF image, json file
+                imgs.append(([imgpath.replace("3_3","1_1"),imgpath.replace("3_3","1_2"),imgpath.replace("3_3","1_3"),
+                             imgpath.replace("3_3","1_4"),imgpath.replace("3_3","1_5"),imgpath.replace("3_3","2_1"),
+                             imgpath.replace("3_3","2_2"),imgpath.replace("3_3","2_3"),imgpath.replace("3_3","2_4"),
+                             imgpath.replace("3_3","2_5"),imgpath.replace("3_3","3_1"),imgpath.replace("3_3","3_2"),imgpath,
+                             imgpath.replace("3_3","3_4"),imgpath.replace("3_3","3_5"),imgpath.replace("3_3","4_1"),
+                             imgpath.replace("3_3","4_2"),imgpath.replace("3_3","4_3"),imgpath.replace("3_3","4_4"),
+                             imgpath.replace("3_3","4_5"),imgpath.replace("3_3","5_1"),imgpath.replace("3_3","5_2"),
+                             imgpath.replace("3_3","5_3"),imgpath.replace("3_3","5_4"),imgpath.replace("3_3","5_5")],
+                imgpath.replace(path,"").replace("/",""),imgpath.replace('png',"json")))   # centerview image, name, json file
 
         # for imgpath in glob.glob(path+"/*.jpg"):
         #     if exists(imgpath) and exists(imgpath.replace('jpg',"json")):
@@ -450,11 +457,14 @@ class MultipleVertexJson(data.Dataset):
         Otherwise, during training this function returns the 
         belief maps and affinity fields and image as tensors.  
         """
-        path, name, lf_path, txt = self.imgs[index]
-        img = self.loader(path)
-        lf_img = self.loader(lf_path)
+        img = []
+        path, name, txt = self.imgs[index]
+        for path_ in path:
+            img.append(self.loader(path_))
+        
+        # lf_img = self.loader(lf_path)
 
-        img_size = img.size
+        img_size = img[12].size
         img_size = (400,400)
 
         loader = loadjson
@@ -485,7 +495,7 @@ class MultipleVertexJson(data.Dataset):
             rotations = torch.zeros(1,4).float()
 
         # Camera intrinsics
-        path_cam = path.replace(name,'_camera_settings.json')
+        path_cam = path[12].replace(name,'_camera_settings.json')
         with open(path_cam) as data_file:    
             data = json.load(data_file)
         # Assumes one camera
@@ -499,7 +509,7 @@ class MultipleVertexJson(data.Dataset):
         matrix_camera[2,2] = 1
 
         # Load the cuboid sizes
-        path_set = path.replace(name,'_object_settings.json')
+        path_set = path[12].replace(name,'_object_settings.json')
         with open(path_set) as data_file:    
             data = json.load(data_file)
 
@@ -512,7 +522,7 @@ class MultipleVertexJson(data.Dataset):
                 if self.objectsofinterest in info['class']:
                     cuboid = np.array(info['cuboid_dimensions'])
 
-        img_original = img.copy()        
+        # img_original = img.copy()        
 
         
         def Reproject(points,tm, rm):
@@ -540,11 +550,11 @@ class MultipleVertexJson(data.Dataset):
 
         tm = np.float32([[1, 0, dx], [0, 1, dy]])
         rm = cv2.getRotationMatrix2D(
-            (img.size[0]/2, img.size[1]/2), angle, 1)
+            (img[12].size[0]/2, img[12].size[1]/2), angle, 1)
 
-        lf_tm = np.float32([[1, 0, dx], [0, 1, dy]])
-        lf_rm = cv2.getRotationMatrix2D(
-            (lf_img.size[0]/2, lf_img.size[1]/2), angle, 1)
+        # lf_tm = np.float32([[1, 0, dx], [0, 1, dy]])
+        # lf_rm = cv2.getRotationMatrix2D(
+        #     (lf_img.size[0]/2, lf_img.size[1]/2), angle, 1)
 
         for i_objects in range(len(pointsBelief)):
             points = pointsBelief[i_objects]
@@ -558,101 +568,103 @@ class MultipleVertexJson(data.Dataset):
             new_cuboid = Reproject(points, tm, rm)
             points_keypoints[i_objects] = new_cuboid.tolist()
             points_keypoints[i_objects] = list(map(tuple, points_keypoints[i_objects]))
-                
-        image_r = cv2.warpAffine(np.array(img), rm, img.size)
-        result = cv2.warpAffine(image_r, tm, img.size)
-        img = Image.fromarray(result)
 
-        lf_image_r = cv2.warpAffine(np.array(lf_img), lf_rm, lf_img.size)
-        lf_result = cv2.warpAffine(lf_image_r, lf_tm, lf_img.size)
-        lf_img = Image.fromarray(lf_result)
+        for i in range(len(img)):        
+            image_r = cv2.warpAffine(np.array(img[i]), rm, img[i].size)
+            result = cv2.warpAffine(image_r, tm, img[i].size)
+            img[i] = Image.fromarray(result)
+
+        # lf_image_r = cv2.warpAffine(np.array(lf_img), lf_rm, lf_img.size)
+        # lf_result = cv2.warpAffine(lf_image_r, lf_tm, lf_img.size)
+        # lf_img = Image.fromarray(lf_result)
+
         # Note:  All point coordinates are in the image space, e.g., pixel value.
         # This is used when we do saving --- helpful for debugging
-        if self.save or self.test:   
-            # Use the save to debug the data
-            if self.test:
-                draw = ImageDraw.Draw(img_original)
-            else:
-                draw = ImageDraw.Draw(img)
+        # if self.save or self.test:   
+        #     # Use the save to debug the data
+        #     if self.test:
+        #         draw = ImageDraw.Draw(img_original)
+        #     else:
+        #         draw = ImageDraw.Draw(img)
             
-            # PIL drawing functions, here for sharing draw
-            def DrawKeypoints(points):
-                for key in points:
-                    DrawDot(key,(12, 115, 170),7) 
+        #     # PIL drawing functions, here for sharing draw
+        #     def DrawKeypoints(points):
+        #         for key in points:
+        #             DrawDot(key,(12, 115, 170),7) 
                                        
-            def DrawLine(point1, point2, lineColor, lineWidth):
-                if not point1 is None and not point2 is None:
-                    draw.line([point1,point2],fill=lineColor,width=lineWidth)
+        #     def DrawLine(point1, point2, lineColor, lineWidth):
+        #         if not point1 is None and not point2 is None:
+        #             draw.line([point1,point2],fill=lineColor,width=lineWidth)
 
-            def DrawDot(point, pointColor, pointRadius):
-                if not point is None:
-                    xy = [point[0]-pointRadius, point[1]-pointRadius, point[0]+pointRadius, point[1]+pointRadius]
-                    draw.ellipse(xy, fill=pointColor, outline=pointColor)
+        #     def DrawDot(point, pointColor, pointRadius):
+        #         if not point is None:
+        #             xy = [point[0]-pointRadius, point[1]-pointRadius, point[0]+pointRadius, point[1]+pointRadius]
+        #             draw.ellipse(xy, fill=pointColor, outline=pointColor)
 
-            def DrawCube(points, which_color = 0, color = None):
-                '''Draw cube with a thick solid line across the front top edge.'''
-                lineWidthForDrawing = 2
-                lineColor1 = (255, 215, 0)  # yellow-ish
-                lineColor2 = (12, 115, 170)  # blue-ish
-                lineColor3 = (45, 195, 35)  # green-ish
-                if which_color == 3:
-                    lineColor = lineColor3
-                else:
-                    lineColor = lineColor1
+        #     def DrawCube(points, which_color = 0, color = None):
+        #         '''Draw cube with a thick solid line across the front top edge.'''
+        #         lineWidthForDrawing = 2
+        #         lineColor1 = (255, 215, 0)  # yellow-ish
+        #         lineColor2 = (12, 115, 170)  # blue-ish
+        #         lineColor3 = (45, 195, 35)  # green-ish
+        #         if which_color == 3:
+        #             lineColor = lineColor3
+        #         else:
+        #             lineColor = lineColor1
 
-                if not color is None:
-                    lineColor = color        
+        #         if not color is None:
+        #             lineColor = color        
 
-                # draw front
-                DrawLine(points[0], points[1], lineColor, 8) #lineWidthForDrawing)
-                DrawLine(points[1], points[2], lineColor, lineWidthForDrawing)
-                DrawLine(points[3], points[2], lineColor, lineWidthForDrawing)
-                DrawLine(points[3], points[0], lineColor, lineWidthForDrawing)
+        #         # draw front
+        #         DrawLine(points[0], points[1], lineColor, 8) #lineWidthForDrawing)
+        #         DrawLine(points[1], points[2], lineColor, lineWidthForDrawing)
+        #         DrawLine(points[3], points[2], lineColor, lineWidthForDrawing)
+        #         DrawLine(points[3], points[0], lineColor, lineWidthForDrawing)
                 
-                # draw back
-                DrawLine(points[4], points[5], lineColor, lineWidthForDrawing)
-                DrawLine(points[6], points[5], lineColor, lineWidthForDrawing)
-                DrawLine(points[6], points[7], lineColor, lineWidthForDrawing)
-                DrawLine(points[4], points[7], lineColor, lineWidthForDrawing)
+        #         # draw back
+        #         DrawLine(points[4], points[5], lineColor, lineWidthForDrawing)
+        #         DrawLine(points[6], points[5], lineColor, lineWidthForDrawing)
+        #         DrawLine(points[6], points[7], lineColor, lineWidthForDrawing)
+        #         DrawLine(points[4], points[7], lineColor, lineWidthForDrawing)
                 
-                # draw sides
-                DrawLine(points[0], points[4], lineColor, lineWidthForDrawing)
-                DrawLine(points[7], points[3], lineColor, lineWidthForDrawing)
-                DrawLine(points[5], points[1], lineColor, lineWidthForDrawing)
-                DrawLine(points[2], points[6], lineColor, lineWidthForDrawing)
+        #         # draw sides
+        #         DrawLine(points[0], points[4], lineColor, lineWidthForDrawing)
+        #         DrawLine(points[7], points[3], lineColor, lineWidthForDrawing)
+        #         DrawLine(points[5], points[1], lineColor, lineWidthForDrawing)
+        #         DrawLine(points[2], points[6], lineColor, lineWidthForDrawing)
 
-                # draw dots
-                DrawDot(points[0], pointColor=(255,255,255), pointRadius = 3)
-                DrawDot(points[1], pointColor=(0,0,0), pointRadius = 3)
+        #         # draw dots
+        #         DrawDot(points[0], pointColor=(255,255,255), pointRadius = 3)
+        #         DrawDot(points[1], pointColor=(0,0,0), pointRadius = 3)
 
-            # Draw all the found objects. 
-            for points_belief_objects in pointsBelief:
-                DrawCube(points_belief_objects)
-            for keypoint in points_keypoints:
-                DrawKeypoints(keypoint)
+        #     # Draw all the found objects. 
+        #     for points_belief_objects in pointsBelief:
+        #         DrawCube(points_belief_objects)
+        #     for keypoint in points_keypoints:
+        #         DrawKeypoints(keypoint)
 
-            img = self.transform(img)
+        #     img = self.transform(img)
             
-            return {
-                "img":img,
-                "translations":translations,
-                "rot_quaternions":rotations,
-                'pointsBelief':np.array(points_all[0]),
-                'matrix_camera':matrix_camera,
-                'img_original': np.array(img_original),
-                'cuboid': cuboid,
-                'file_name':name,
-            }
+        #     return {
+        #         "img":img,
+        #         "translations":translations,
+        #         "rot_quaternions":rotations,
+        #         'pointsBelief':np.array(points_all[0]),
+        #         'matrix_camera':matrix_camera,
+        #         'img_original': np.array(img_original),
+        #         'cuboid': cuboid,
+        #         'file_name':name,
+        #     }
 
         # Create the belief map
         beliefsImg = CreateBeliefMap(
-            img, 
+            img[12], 
             pointsBelief=pointsBelief,
             nbpoints = 9,
             sigma = self.sigma)
 
         # Create the image maps for belief
-        transform = transforms.Compose([transforms.Resize(min(img_size))])
+
         totensor = transforms.Compose([transforms.ToTensor()])
 
         for j in range(len(beliefsImg)):
@@ -669,22 +681,26 @@ class MultipleVertexJson(data.Dataset):
 
         # Create affinity maps
         scale = 8
-        if min (img.size) / 8.0  != min (img_size)/8.0:
-            scale = min (img.size)/(min (img_size)/8.0)
+        if min (img[12].size) / 8.0  != min (img_size)/8.0:
+            scale = min (img[12].size)/(min (img_size)/8.0)
             # print (scale)
 
-        affinities = GenerateMapAffinity(img,8,pointsBelief,objects_centroid,scale)
-        # for debug use comment the line
-        img = self.transform(img)
-        lf_img = self.lf_transform(lf_img)
+        affinities = GenerateMapAffinity(img[12],8,pointsBelief,objects_centroid,scale)
+        
+        size_transform = transforms.Compose([transforms.Resize(min(img_size))])
+        for i in range(len(img)):
+            img[i] = size_transform(img[i])
+
+        # lf_img = self.lf_transform(lf_img)
 
         # Transform the images for training input
-        # w_crop = np.random.randint(0, img.size[0] - img_size[0]+1)
-        # h_crop = np.random.randint(0, img.size[1] - img_size[1]+1)
+        # w_crop = np.random.randint(0, img[12].size[0] - img_size[0]+1)
+        w_crop = 0
+        h_crop = np.random.randint(0, img[12].size[1] - img_size[1]+1)
 
         # Crop begin at certain point match with matlab LF generation
-        w_crop = 88
-        h_crop = 0
+        # w_crop = 88
+        # h_crop = 0
 
         transform = transforms.Compose([transforms.Resize(min(img_size))])
         totensor = transforms.Compose([transforms.ToTensor()])
@@ -697,11 +713,20 @@ class MultipleVertexJson(data.Dataset):
         else:
             normalize = transforms.Compose([AddNoise(0.0001)])
         
-        # img = crop(img,h_crop,w_crop,img_size[1],img_size[0])
-        # img = totensor(img)
+        
 
+        lf_img = np.zeros([img[12].size[1]*5, img[12].size[0]*5, 3])
+        lf_img = lf_img.astype(np.uint8)
+        for i in range(5):
+            for j in range(5):
+                lf_img[i::5,j::5,:] = np.array(img[i*5+j])
+        lf_img = Image.fromarray(lf_img)
+        lf_img = self.lf_transform(lf_img)
+        lf_img = crop(lf_img,h_crop*5,w_crop*5,img_size[1]*5,img_size[0]*5)
         lf_img = totensor(lf_img)
         lf_img = normalize(lf_img)
+        # lf_img = totensor(lf_img)
+        # lf_img = normalize(lf_img)
         # img = normalize(img)
 
         w_crop = int(w_crop/8)
