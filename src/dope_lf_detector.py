@@ -31,12 +31,14 @@ from PIL import ImageDraw
 import torch
 import torchvision.transforms as transforms
 import math
+import glob
+from os.path import exists, basename
 # Import DOPE code
 rospack = rospkg.RosPack()
 g_path2package = rospack.get_path('dope')
 sys.path.append("{}/src/inference".format(g_path2package))
 from cuboid import *
-from detector import *
+from lf_detector import *
 
 ### Global Variables
 g_bridge = CvBridge()
@@ -290,10 +292,24 @@ def run_dope_node(params, freq=5, overlaybelief=False):
     # search all the light field images
     print(matrix_camera)
     img_path = []
+    lfimg_path = []
+    # for root, dirnames, filenames in os.walk(params['image_folder']):
+    #     for filename in fnmatch.filter(filenames,params['image_format']):
+    #         img_path.append(os.path.join(root, filename))
+    # print(img_path)
+    # if input_lf:
     for root, dirnames, filenames in os.walk(params['image_folder']):
         for filename in fnmatch.filter(filenames,params['image_format']):
-            img_path.append(os.path.join(root, filename))
-    # print(img_path)
+            imgpath = os.path.join(root, filename)
+            if exists(imgpath.replace("CV.jpg","LF.jpg")):
+                img_path.append(imgpath)
+                lfimg_path.append(imgpath.replace("CV.jpg","LF.jpg"))
+    # print(lfimg_path)
+    # else:
+    #     for root, dirnames, filenames in os.walk(params['image_folder']):
+    #         for filename in fnmatch.filter(filenames,params['image_format']):
+    #             imgpath = os.path.join(root, filename)
+    #             img_path.append(imgpath) 
 
     # For each object to detect, load network model, create PNP solver, and start ROS publishers
     for model in params['weights']:
@@ -326,20 +342,6 @@ def run_dope_node(params, freq=5, overlaybelief=False):
                 queue_size=10
             )
 
-    # Start ROS publisher
-    # pub_rgb_dope_points = \
-    #     rospy.Publisher(
-    #         params['topic_publishing']+"/rgb_points", 
-    #         ImageSensor_msg, 
-    #         queue_size=10
-    #     )
-    
-    # Starts ROS listener
-    # rospy.Subscriber(
-    #     topic_cam, 
-    #     ImageSensor_msg, 
-    #     __image_callback
-    # )
 
     # Initialize ROS node
     rospy.init_node('dope_save_to_file', anonymous=True)
@@ -350,11 +352,14 @@ def run_dope_node(params, freq=5, overlaybelief=False):
 
     # while not rospy.is_shutdown():
         # if g_img is not None:
-    for sub_ap_img in img_path:
+    for sub_ap_img, lf_img in zip(img_path,lfimg_path):
         # Copy and draw image
 
         g_img = cv2.imread(sub_ap_img)
+        g_lf_img = cv2.imread(lf_img)
         g_img = cv2.cvtColor(g_img, cv2.COLOR_RGB2BGR)
+        g_lf_img = cv2.cvtColor(g_lf_img, cv2.COLOR_RGB2BGR)
+
 
         # g_img = cv2.imread(sub_ap_img,cv2.IMREAD_GRAYSCALE)
         # g_img = cv2.cvtColor(g_img,cv2.COLOR_GRAY2BGR)
@@ -365,7 +370,7 @@ def run_dope_node(params, freq=5, overlaybelief=False):
         for m in models:
             # Detect object
             if overlaybelief:
-                belief_tensor, img_tensor = ObjectDetector.retrive_belief_map(models[m].net, g_img)
+                belief_tensor, img_tensor = ObjectDetector.lf_retrive_belief_map(models[m].net, g_img, g_lf_img)
                 OverlayBeliefOnImage(img_tensor, belief_tensor, name=(sub_ap_img[:-4] + 'beliefmap.png'), factor=0.5)
 
 
@@ -373,7 +378,7 @@ def run_dope_node(params, freq=5, overlaybelief=False):
                 results = ObjectDetector.detect_object_in_image(
                             models[m].net,
                             pnp_solvers[m],
-                            g_img,
+                            g_lf_img,
                             config_detect
                             )
                 # Publish pose and overlay cube on image
