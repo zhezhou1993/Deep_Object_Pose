@@ -112,7 +112,7 @@ class DopeNetwork(nn.Module):
 
         self.stop_at_stage = stop_at_stage
 
-        vgg_full = models.vgg19(pretrained=False).features
+        vgg_full = models.vgg19(pretrained=pretrained).features
         self.vgg = nn.Sequential()
 
         conv_temp = nn.Conv2d(3,64,kernel_size=angluar_res, stride=angluar_res,padding=0)
