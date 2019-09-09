@@ -25,7 +25,7 @@ import torch.nn as nn
 import torchvision.transforms as transforms
 from torch.autograd import Variable
 import torchvision.models as models
-
+import torch.nn.functional as F
 from scipy import ndimage
 import scipy
 import scipy.ndimage as ndimage
@@ -58,17 +58,42 @@ class DopeNetwork(nn.Module):
         super(DopeNetwork, self).__init__()
 
         self.stop_at_stage = stop_at_stage
-
+        self.angular_res = angluar_res
+        self.input_channels = 3
         vgg_full = models.vgg19(pretrained=False).features
         self.vgg = nn.Sequential()
 
-        conv_temp = nn.Conv2d(3,64,kernel_size=angluar_res, stride=angluar_res,padding=0)
-        # torch.nn.init.xavier_uniform(conv_temp.weight)
-        self.vgg.add_module('angular_filter', conv_temp)
-        self.vgg.add_module('af_relu',nn.ReLU(inplace=True))
-        conv_temp = nn.Conv2d(64,64,kernel_size=3, stride=1,padding=1)
+        self.angular_conv = nn.Sequential(*[
+            nn.Conv3d(in_channels=self.input_channels,
+                      out_channels=64,
+                      kernel_size=(self.angular_res ** 2, 1, 1),
+                      stride=(self.angular_res ** 2, 1, 1),
+                      padding=(0, 0, 0)),
+            nn.BatchNorm3d(64)
+        ])
+
+        self.EPI_row = nn.Sequential(*[
+            nn.Conv3d(in_channels=self.input_channels,
+                      out_channels=64,
+                      kernel_size=(self.angular_res, 3, 3),
+                      stride=(self.angular_res, 1, 1),
+                      padding=(0, 1, 1)),
+            nn.BatchNorm3d(64)
+        ])
+
+        self.EPI_col = nn.Sequential(*[
+            nn.Conv3d(in_channels=self.input_channels,
+                      out_channels=64,
+                      kernel_size=(self.angular_res, 3, 3),
+                      stride=(1, 1, 1),
+                      dilation=(self.angular_res, 1, 1),
+                      padding=(0, 1, 1)),
+            nn.BatchNorm3d(64)
+        ])
+
+        conv_temp = nn.Conv2d(64 * (2 * self.angular_res + 1), 64, kernel_size=3, stride=1, padding=1)
         self.vgg.add_module('0', conv_temp)
-        self.vgg.add_module('1',nn.ReLU(inplace=True))
+        self.vgg.add_module('1', nn.ReLU(inplace=True))
 
         for i_layer in range(24):
             if i_layer == 0 or i_layer == 1:
@@ -114,7 +139,16 @@ class DopeNetwork(nn.Module):
     def forward(self, x):
         '''Runs inference on the neural network'''
 
-        out1 = self.vgg(x)
+        x_ang0 = self.angular_conv(x)
+        x_EPI_row = self.EPI_row(x)
+        x_EPI_col = self.EPI_col(x)
+
+        concatenate_feature = torch.cat((x_ang0, x_EPI_row, x_EPI_col), dim=2)
+        x_concat = F.relu(concatenate_feature)
+
+        x_concat = x_concat.view(x_concat.shape[0], x_concat.shape[1] * x_concat.shape[2], x_concat.shape[3],
+                                 x_concat.shape[4])
+        out1 = self.vgg(x_concat)
 
         out1_2 = self.m1_2(out1)
         out1_1 = self.m1_1(out1)
