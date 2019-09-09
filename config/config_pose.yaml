@@ -1,15 +1,21 @@
 topic_camera: "/dope/webcam_rgb_raw"
 topic_publishing: "dope"
+image_folder: "/home/alienicp/pose_estimation_ws/src/dope/train_tall_cup/test_real/"
+image_format: "*CV.jpg"
 frame_id: "/dope"
-
+overlaybelief: False
 # Comment any of these lines to prevent detection / pose estimation of that object
 weights: {
     # "cracker":"cracker_60.pth", 
     # "gelatin":"gelatin_60.pth",
     # "meat":"meat_20.pth", 
     # "mustard":"mustard_60.pth", 
-    "soup":"soup_60.pth", 
-    #"sugar":"sugar_60.pth"
+    # "soup":"soup_60.pth", 
+    # "sugar":"sugar_60.pth",
+    # "foam_brick": "foam_brick_80.pth"
+    # "t-slots": "t_slots_154.pth"
+#    "wine_cup": "single_wc_63.pth",
+     "tall_cup": "tall_cup_3lflayer_20.pth"
 }
 
 # Cuboid dimension in cm x,y,z
@@ -20,30 +26,64 @@ dimensions: {
     "mustard": [9.6024150848388672,19.130100250244141,5.824894905090332],
     "soup": [6.7659378051757813,10.185500144958496,6.771425724029541],
     "sugar": [9.267730712890625,17.625339508056641,4.5134143829345703],
+    "foam_brick": [7.7874,5.1193,5.256],
+    "t-slots": [3.17, 2.54, 3.81],
+    "wine_cup": [8.55, 17.85, 8.55],
+    "tall_cup": [9.8, 12.0, 9.8]
 }
 
 draw_colors: {
     "cracker": [13, 255, 128],  # green
     "gelatin": [255, 255, 255],  # while
     "meat": [0, 104, 255],  # blue
-    "mustard": [217,12, 232],  # magenta
+    # "mustard": [217,12, 232],  # magenta
     "soup": [255, 101, 0],  # orange
     "sugar": [232, 222, 12],  # yellow
+    "foam_brick": [255,0,0],
+    "t-slots": [0, 0, 255],
+    "wine_cup": [217,12, 232],
+    "tall_cup": [255, 101, 0]
 }
 
 # Camera intrinsics (Logitech C920)
+# camera_settings: {
+#     "name": "logitech_c920",
+#     "width": 640,
+#     "height": 480,
+#     "fx": 641.5,
+#     "fy": 641.5,
+#     "cx": 320.0,
+#     "cy": 240.0
+# }
+# camera_settings: {
+#     "name": "logitech_c920",
+#     "width": 2064,
+#     "height": 1544,
+#     "fx": 641.5,
+#     "fy": 641.5,
+#     "cx": 1032.0,
+#     "cy": 772.0
+# }
+# camera_settings: {
+#     "name": "zivid",
+#     "width": 1920,
+#     "height": 1200,
+#     "fx": 2770.971,
+#     "fy": 2770.971,
+#     "cx": 968.0,
+#     "cy": 586.0
+# }
 camera_settings: {
-    "name": "logitech_c920",
-    "width": 640,
-    "height": 480,
-    "fx": 641.5,
-    "fy": 641.5,
-    "cx": 320.0,
-    "cy": 240.0
+    "name": "lytro_illum",
+    "width": 552,
+    "height": 383,
+    "fx": 525.6166,
+    "fy": 525.6166,
+    "cx": 277.7170,
+    "cy": 197.8872
 }
-
 # Config params for DOPE
 thresh_angle: 0.5
-thresh_map: 0.01
+thresh_map: 0.001
 sigma: 3
-thresh_points: 0.1
+thresh_points: 0.005
