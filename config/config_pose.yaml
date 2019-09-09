@@ -29,7 +29,8 @@ dimensions: {
     "foam_brick": [7.7874,5.1193,5.256],
     "t-slots": [3.17, 2.54, 3.81],
     "wine_cup": [8.55, 17.85, 8.55],
-    "tall_cup": [9.8, 12.0, 9.8]
+    "tall_cup": [9.8, 12.0, 9.8],
+    "glass_jar": [10.49, 10.69, 10.49]
 }
 
 draw_colors: {
@@ -37,12 +38,13 @@ draw_colors: {
     "gelatin": [255, 255, 255],  # while
     "meat": [0, 104, 255],  # blue
     # "mustard": [217,12, 232],  # magenta
-    "soup": [255, 101, 0],  # orange
+#    "soup": [255, 101, 0],  # orange
     "sugar": [232, 222, 12],  # yellow
     "foam_brick": [255,0,0],
     "t-slots": [0, 0, 255],
     "wine_cup": [217,12, 232],
-    "tall_cup": [255, 101, 0]
+    "tall_cup": [255, 101, 0],
+    "glass_jar": [255, 101, 0]
 }
 
 # Camera intrinsics (Logitech C920)
