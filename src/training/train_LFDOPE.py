@@ -106,22 +106,56 @@ class DopeNetwork(nn.Module):
             numBeliefMap=9,
             numAffinity=16,
             stop_at_stage=6,  # number of stages to process (if less than total number of stages)
-            angluar_res=5
+            angular_res=5
         ):
         super(DopeNetwork, self).__init__()
 
         self.stop_at_stage = stop_at_stage
-
+        self.input_channels = 3
         vgg_full = models.vgg19(pretrained=pretrained).features
         self.vgg = nn.Sequential()
+        self.angular_res = angular_res
+        # conv_temp = nn.Conv2d(3,64,kernel_size=angular_res, stride=angular_res,padding=0)
+        # # torch.nn.init.xavier_uniform(conv_temp.weight)
+        # self.vgg.add_module('angular_filter', conv_temp)
+        # self.vgg.add_module('af_relu',nn.ReLU(inplace=True))
+        
 
-        conv_temp = nn.Conv2d(3,64,kernel_size=angluar_res, stride=angluar_res,padding=0)
-        # torch.nn.init.xavier_uniform(conv_temp.weight)
-        self.vgg.add_module('angular_filter', conv_temp)
-        self.vgg.add_module('af_relu',nn.ReLU(inplace=True))
-        conv_temp = nn.Conv2d(64,64,kernel_size=3, stride=1,padding=1)
+        self.angular_conv = nn.Sequential(*[
+            nn.Conv3d(in_channels=self.input_channels,
+                      out_channels=64,
+                      kernel_size=(self.angular_res ** 2, 1, 1),
+                      stride=(self.angular_res ** 2, 1, 1),
+                      padding=(0, 0, 0)),
+            nn.BatchNorm3d(64)
+        ])
+
+        self.EPI_row = nn.Sequential(*[
+            nn.Conv3d(in_channels=self.input_channels,
+                      out_channels=64,
+                      kernel_size=(self.angular_res, 3, 3),
+                      stride=(self.angular_res, 1, 1),
+                      padding=(0, 1, 1)),
+            nn.BatchNorm3d(64)
+        ])
+
+
+        self.EPI_col = nn.Sequential(*[
+            nn.Conv3d(in_channels=self.input_channels,
+                      out_channels=64,
+                      kernel_size=(self.angular_res, 3, 3),
+                      stride=(1, 1, 1),
+                      dilation=(self.angular_res, 1, 1),
+                      padding=(0, 1, 1)),
+            nn.BatchNorm3d(64)
+        ])
+
+
+        conv_temp = nn.Conv2d(64 * (2 * self.angular_res + 1),64,kernel_size=3, stride=1,padding=1)
         self.vgg.add_module('0', conv_temp)
         self.vgg.add_module('1',nn.ReLU(inplace=True))
+
+
         for i_layer in range(24):
             if i_layer == 0 or i_layer == 1:
                 continue
@@ -165,8 +199,16 @@ class DopeNetwork(nn.Module):
 
     def forward(self, x):
         '''Runs inference on the neural network'''
+        x_ang0 = self.angular_conv(x)
+        x_EPI_row = self.EPI_row(x)
+        x_EPI_col = self.EPI_col(x)
 
-        out1 = self.vgg(x)
+        concatenate_feature = torch.cat((x_ang0, x_EPI_row, x_EPI_col), dim=2)
+        x_concat = F.relu(concatenate_feature)
+
+        x_concat = x_concat.view(x_concat.shape[0], x_concat.shape[1] * x_concat.shape[2], x_concat.shape[3],
+                                 x_concat.shape[4])
+        out1 = self.vgg(x_concat)
 
         out1_2 = self.m1_2(out1)
         out1_1 = self.m1_1(out1)
@@ -357,18 +399,19 @@ def loadimages(root):
     imgs = []
 
     def add_json_files(path,):
-        for imgpath in glob.glob(path+"/*.Sub3_3.png"):
-            if exists(imgpath) and exists(imgpath.replace('png',"json")):
-                imgs.append(([imgpath.replace("3_3","1_1"),imgpath.replace("3_3","1_2"),imgpath.replace("3_3","1_3"),
-                             imgpath.replace("3_3","1_4"),imgpath.replace("3_3","1_5"),imgpath.replace("3_3","2_1"),
-                             imgpath.replace("3_3","2_2"),imgpath.replace("3_3","2_3"),imgpath.replace("3_3","2_4"),
-                             imgpath.replace("3_3","2_5"),imgpath.replace("3_3","3_1"),imgpath.replace("3_3","3_2"),imgpath,
-                             imgpath.replace("3_3","3_4"),imgpath.replace("3_3","3_5"),imgpath.replace("3_3","4_1"),
-                             imgpath.replace("3_3","4_2"),imgpath.replace("3_3","4_3"),imgpath.replace("3_3","4_4"),
-                             imgpath.replace("3_3","4_5"),imgpath.replace("3_3","5_1"),imgpath.replace("3_3","5_2"),
-                             imgpath.replace("3_3","5_3"),imgpath.replace("3_3","5_4"),imgpath.replace("3_3","5_5")],
-                imgpath.replace(path,"").replace("/",""),imgpath.replace('png',"json")))   # centerview image, name, json file
-
+        for imgpath in glob.glob(path+"/*.lf.png"):
+            if exists(imgpath) and exists(imgpath.replace('lf.png',"json")):
+                # imgs.append(([imgpath.replace("3_3","1_1"),imgpath.replace("3_3","1_2"),imgpath.replace("3_3","1_3"),
+                #              imgpath.replace("3_3","1_4"),imgpath.replace("3_3","1_5"),imgpath.replace("3_3","2_1"),
+                #              imgpath.replace("3_3","2_2"),imgpath.replace("3_3","2_3"),imgpath.replace("3_3","2_4"),
+                #              imgpath.replace("3_3","2_5"),imgpath.replace("3_3","3_1"),imgpath.replace("3_3","3_2"),imgpath,
+                #              imgpath.replace("3_3","3_4"),imgpath.replace("3_3","3_5"),imgpath.replace("3_3","4_1"),
+                #              imgpath.replace("3_3","4_2"),imgpath.replace("3_3","4_3"),imgpath.replace("3_3","4_4"),
+                #              imgpath.replace("3_3","4_5"),imgpath.replace("3_3","5_1"),imgpath.replace("3_3","5_2"),
+                #              imgpath.replace("3_3","5_3"),imgpath.replace("3_3","5_4"),imgpath.replace("3_3","5_5")],
+                # imgpath.replace(path,"").replace("/",""),imgpath.replace('png',"json")))   # centerview image, name, json file
+                imgs.append((imgpath,imgpath.replace(path,"").replace("/",""),
+                    imgpath.replace('lf.png',"json")))
         # for imgpath in glob.glob(path+"/*.jpg"):
         #     if exists(imgpath) and exists(imgpath.replace('jpg',"json")):
         #         imgs.append((imgpath,imgpath.replace(path,"").replace("/",""),
@@ -426,6 +469,7 @@ class MultipleVertexJson(data.Dataset):
         self.sigma = sigma
         self.random_translation = random_translation
         self.random_rotation = random_rotation
+        self.angular_res = 5
 
         def load_data(path):
             '''Recursively load the data.  This is useful to load all of the FAT dataset.'''
@@ -459,13 +503,19 @@ class MultipleVertexJson(data.Dataset):
         """
         img = []
         path, name, txt = self.imgs[index]
-        for path_ in path:
-            img.append(self.loader(path_))
-        
+        # for path_ in path:
+
+
+        img_origin = self.loader(path)
+        img_origin = np.array(img_origin)
+        for i in range(self.angular_res):
+            for j in range(self.angular_res):
+                img.append(Image.fromarray(img_origin[i::5,j::5,:]))
+                # lf_img[i::5,j::5,:] = np.array(img[i*5+j])
         # lf_img = self.loader(lf_path)
 
-        img_size = img[12].size
-        img_size = (400,400)
+        img_size = img[12]
+        img_size = (224,224)
 
         loader = loadjson
         
@@ -495,7 +545,7 @@ class MultipleVertexJson(data.Dataset):
             rotations = torch.zeros(1,4).float()
 
         # Camera intrinsics
-        path_cam = path[12].replace(name,'_camera_settings.json')
+        path_cam = path.replace(name,'_camera_settings.json')
         with open(path_cam) as data_file:    
             data = json.load(data_file)
         # Assumes one camera
@@ -509,7 +559,7 @@ class MultipleVertexJson(data.Dataset):
         matrix_camera[2,2] = 1
 
         # Load the cuboid sizes
-        path_set = path[12].replace(name,'_object_settings.json')
+        path_set = path.replace(name,'_object_settings.json')
         with open(path_set) as data_file:    
             data = json.load(data_file)
 
@@ -696,7 +746,7 @@ class MultipleVertexJson(data.Dataset):
         # Transform the images for training input
         # w_crop = np.random.randint(0, img[12].size[0] - img_size[0]+1)
         w_crop = 0
-        h_crop = np.random.randint(0, img[12].size[1] - img_size[1]+1)
+        h_crop = 0
 
         # Crop begin at certain point match with matlab LF generation
         # w_crop = 88
@@ -715,19 +765,30 @@ class MultipleVertexJson(data.Dataset):
         
         
 
-        lf_img = np.zeros([img[12].size[1]*5, img[12].size[0]*5, 3])
-        lf_img = lf_img.astype(np.uint8)
-        for i in range(5):
-            for j in range(5):
-                lf_img[i::5,j::5,:] = np.array(img[i*5+j])
-        lf_img = Image.fromarray(lf_img)
-        lf_img = self.lf_transform(lf_img)
-        lf_img = crop(lf_img,h_crop*5,w_crop*5,img_size[1]*5,img_size[0]*5)
-        lf_img = totensor(lf_img)
-        lf_img = normalize(lf_img)
+        # lf_img = np.zeros([img[12].size[1]*5, img[12].size[0]*5, 3])
+        # lf_img = lf_img.astype(np.uint8)
+        # for i in range(5):
+        #     for j in range(5):
+        #         lf_img[i::5,j::5,:] = np.array(img[i*5+j])
+        # lf_img = Image.fromarray(lf_img)
+        # lf_img = self.lf_transform(lf_img)
+        # lf_img = crop(lf_img,h_crop*5,w_crop*5,img_size[1]*5,img_size[0]*5)
+
+        raw_image_3d = np.zeros((img_origin.shape[2], self.angular_res ** 2,
+                                 img_origin.shape[0] / self.angular_res,
+                                 img_origin.shape[1] / self.angular_res))
+        # for k in range(3):  # divide r, g, b channels
+        for i in range(self.angular_res):
+            for j in range(self.angular_res):
+                raw_image_3d[:, i * self.angular_res + j] = np.array(img[i * self.angular_res + j]).transpose(2,0,1)
+        raw_image_3d = np.array(raw_image_3d, dtype=np.float32) / 255.0
+        raw_image_3d = torch.FloatTensor(raw_image_3d)
+        # raw_image_3d = normalize(raw_image_3d)
+
         # lf_img = totensor(lf_img)
         # lf_img = normalize(lf_img)
         # img = normalize(img)
+
 
         w_crop = int(w_crop/8)
         h_crop = int(h_crop/8)
@@ -743,7 +804,7 @@ class MultipleVertexJson(data.Dataset):
             affinities = torch.cat([affinities,torch.zeros(16,50,1)],dim=2)
 
         return {
-            'img':lf_img,    
+            'img':raw_image_3d,    
             "affinities":affinities,            
             'beliefs':beliefs,
         }
@@ -863,7 +924,7 @@ def getAfinityCenter(width, height, point, center, radius=7, img_affinity=None):
 
     del draw
 
-    # Compute the array to add the afinity
+    # Compute the array to add the affinity
     array = (np.array(imgAffinity)/255)[:,:,0]
 
     angle_vector = np.array(center) - np.array(point)
@@ -1063,6 +1124,50 @@ def make_grid(tensor, nrow=8, padding=2,
             k = k + 1
     return grid
 
+def OverlayAffinityOnImage(img, beliefs, name, path="", factor=0.7, grid=3,
+        norm_belief = True):
+    """ python
+    take as input
+    img: a tensor image in pytorch normalized at 0.5
+            1x3xwxh
+    belief: tensor of the same size as the image to overlay over img
+            1xnb_beliefxwxh
+    name: str to name the image, e.g., output.png
+    path: where to save, e.g., /where/to/save/
+    factor: float [0,1] how much to keep the original, 1 = fully, 0 black
+    grid: how big the grid, e.g., 3 wide.
+    norm_belief: bool to normalize the values [0,1]
+    """
+
+    tensor = torch.squeeze(beliefs)
+    belief_imgs = []
+    in_img = torch.squeeze(img)
+    transform = transforms.Compose(
+        [transforms.ToPILImage(), transforms.Resize([in_img.size()[1], in_img.size()[2]]), transforms.ToTensor()])
+    in_img *= factor
+    norm_belief = True
+    for j in range(tensor.size()[0]):
+        belief = tensor[j].clone()
+        if norm_belief:
+            belief -= float(torch.min(belief).data.cpu().numpy())
+            belief /= float(torch.max(belief).data.cpu().numpy())
+        belief = torch.clamp(belief, 0, 1).cpu()
+        belief = torch.squeeze(transform(belief.unsqueeze(0)))
+        belief = torch.cat([
+            belief.unsqueeze(0),
+            belief.unsqueeze(0),
+            belief.unsqueeze(0)
+        ]).unsqueeze(0)
+        belief = torch.clamp(belief, 0, 1).cpu()
+
+        belief_imgs.append(belief.data.squeeze().numpy())
+
+    # Create the image grid
+    belief_imgs = torch.tensor(np.array(belief_imgs))
+
+    save_image(belief_imgs, "{}{}".format(path, name),
+               mean=0, std=1, nrow=grid)
+
 def OverlayBeliefOnImage(img, beliefs, name, path="", factor=0.7, grid=3, 
         norm_belief = True):
     """ python
@@ -1106,7 +1211,51 @@ def OverlayBeliefOnImage(img, beliefs, name, path="", factor=0.7, grid=3,
 
     save_image(belief_imgs, "{}{}".format(path, name),
                mean=0, std=1, nrow=grid)
-               
+
+def DrawBeliefImage(img, beliefs, name, path="", factor=0.7, grid=3,
+        norm_belief = True):
+    """ python
+    take as input
+    img: a tensor image in pytorch normalized at 0.5
+            1x3xwxh
+    belief: tensor of the same size as the image to overlay over img
+            1xnb_beliefxwxh
+    name: str to name the image, e.g., output.png
+    path: where to save, e.g., /where/to/save/
+    factor: float [0,1] how much to keep the original, 1 = fully, 0 black
+    grid: how big the grid, e.g., 3 wide.
+    norm_belief: bool to normalize the values [0,1]
+    """
+
+    tensor = torch.squeeze(beliefs)
+    belief_imgs = []
+    in_img = torch.squeeze(img)
+    transform = transforms.Compose(
+        [transforms.ToPILImage(), transforms.Resize([in_img.size()[1], in_img.size()[2]]), transforms.ToTensor()])
+    in_img *= factor
+    norm_belief = True
+    for j in range(tensor.size()[0]):
+        belief = tensor[j].clone()
+        if norm_belief:
+            belief -= float(torch.min(belief).data.cpu().numpy())
+            belief /= float(torch.max(belief).data.cpu().numpy())
+        belief = torch.clamp(belief, 0, 1).cpu()
+        belief = torch.squeeze(transform(belief.unsqueeze(0)))
+        belief = torch.cat([
+            belief.unsqueeze(0),
+            belief.unsqueeze(0),
+            belief.unsqueeze(0)
+        ]).unsqueeze(0)
+        belief = torch.clamp(belief, 0, 1).cpu()
+
+        belief_imgs.append(belief.data.squeeze().numpy())
+
+    # Create the image grid
+    belief_imgs = torch.tensor(np.array(belief_imgs))
+
+    save_image(belief_imgs, "{}{}".format(path, name),
+               mean=0, std=1, nrow=grid)
+
 def save_image(tensor, filename, nrow=4, padding=2,mean=None, std=None):
     """
     Saves a given Tensor into an image file.
@@ -1285,7 +1434,7 @@ parser.add_argument('--savebelief',
     help='save a visual batch with belief and quit, this is for\
     debugging purposes')
 parser.add_argument('--beliefpath',  
-    default = "/opt/project/path/", 
+    default = "./",
     help='path to save beliefmap data')
 
 parser.add_argument("--randomcrop",
@@ -1396,12 +1545,14 @@ if opt.save:
     quit()
 
 if opt.savebelief:
-    for i in range(2):
+    for i in range(1): # 2
         images = iter(trainingdata).next()
         if normal_imgs is None:
             normal_imgs = [0,1]
         # save_image(images['img'],'{}/train_{}.png'.format( opt.outf,str(i).zfill(5)),mean=normal_imgs[0],std=normal_imgs[1])
-        OverlayBeliefOnImage(images['img'],images['beliefs'],'output.png',opt.beliefpath,factor=0.5)
+        OverlayBeliefOnImage(images['img'],images['beliefs'],'output_bel.png',opt.beliefpath,factor=0.5)
+        OverlayAffinityOnImage(images['img'], images['affinities'], 'output_aff.png', opt.beliefpath, factor=0.5, norm_belief=False)
+        # DrawBeliefImage(images['img'], images['beliefs'], 'output.png', opt.beliefpath, factor=0.5)
         print (i)        
 
     print ('overlap belief are saved ')
