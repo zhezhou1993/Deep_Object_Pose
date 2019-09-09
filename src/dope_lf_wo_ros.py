@@ -1,17 +1,9 @@
 #!/usr/bin/env python
 
-# Copyright (c) 2018 NVIDIA Corporation. All rights reserved.
-# This work is licensed under a Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License.
-# https://creativecommons.org/licenses/by-nc-sa/4.0/legalcode
-
-"""
-This file starts a ROS node to run DOPE, 
-listening to an image topic and publishing poses.
-"""
 
 from __future__ import print_function
 import yaml
-import sys 
+import sys
 import fnmatch
 import os
 
@@ -31,13 +23,15 @@ from PIL import ImageDraw
 import torch
 import torchvision.transforms as transforms
 import math
+import glob
+from os.path import exists, basename
+
 # Import DOPE code
 # rospack = rospkg.RosPack()
-# g_path2package = rospack.get_path('dope')
-g_path2package = '/opt/project'
+g_path2package = '/home/alienicp/pose_estimation_ws/src/dope'
 sys.path.append("{}/src/inference".format(g_path2package))
 from cuboid import *
-from detector import *
+from lf_detector import *
 
 ### Global Variables
 # g_bridge = CvBridge()
@@ -46,10 +40,10 @@ g_draw = None
 
 
 ### Basic functions
-# def __image_callback(msg):
-#     '''Image callback'''
-#     global g_img
-#     g_img = g_bridge.imgmsg_to_cv2(msg, "rgb8")
+def __image_callback(msg):
+    '''Image callback'''
+    global g_img
+    g_img = g_bridge.imgmsg_to_cv2(msg, "rgb8")
     # cv2.imwrite('img.png', cv2.cvtColor(g_img, cv2.COLOR_BGR2RGB))  # for debugging
 
 
@@ -59,26 +53,28 @@ def DrawLine(point1, point2, lineColor, lineWidth):
     '''Draws line on image'''
     global g_draw
     if not point1 is None and point2 is not None:
-        g_draw.line([point1,point2], fill=lineColor, width=lineWidth)
+        g_draw.line([point1, point2], fill=lineColor, width=lineWidth)
+
 
 def DrawDot(point, pointColor, pointRadius):
     '''Draws dot (filled circle) on image'''
     global g_draw
     if point is not None:
         xy = [
-            point[0]-pointRadius, 
-            point[1]-pointRadius, 
-            point[0]+pointRadius, 
-            point[1]+pointRadius
+            point[0] - pointRadius,
+            point[1] - pointRadius,
+            point[0] + pointRadius,
+            point[1] + pointRadius
         ]
-        g_draw.ellipse(xy, 
-            fill=pointColor, 
-            outline=pointColor
-        )
+        g_draw.ellipse(xy,
+                       fill=pointColor,
+                       outline=pointColor
+                       )
+
 
 def DrawCube(points, color=(255, 0, 0)):
     '''
-    Draws cube with a thick solid line across 
+    Draws cube with a thick solid line across
     the front top edge and an X on the top face.
     '''
 
@@ -89,13 +85,13 @@ def DrawCube(points, color=(255, 0, 0)):
     DrawLine(points[1], points[2], color, lineWidthForDrawing)
     DrawLine(points[3], points[2], color, lineWidthForDrawing)
     DrawLine(points[3], points[0], color, lineWidthForDrawing)
-    
+
     # draw back
     DrawLine(points[4], points[5], color, lineWidthForDrawing)
     DrawLine(points[6], points[5], color, lineWidthForDrawing)
     DrawLine(points[6], points[7], color, lineWidthForDrawing)
     DrawLine(points[4], points[7], color, lineWidthForDrawing)
-    
+
     # draw sides
     DrawLine(points[0], points[4], color, lineWidthForDrawing)
     DrawLine(points[7], points[3], color, lineWidthForDrawing)
@@ -103,12 +99,14 @@ def DrawCube(points, color=(255, 0, 0)):
     DrawLine(points[2], points[6], color, lineWidthForDrawing)
 
     # draw dots
-    DrawDot(points[0], pointColor=color, pointRadius = 4)
-    DrawDot(points[1], pointColor=color, pointRadius = 4)
+    DrawDot(points[0], pointColor=color, pointRadius=4)
+    DrawDot(points[1], pointColor=color, pointRadius=4)
 
-    # draw x on the top 
+    # draw x on the top
     DrawLine(points[0], points[5], color, lineWidthForDrawing)
     DrawLine(points[1], points[4], color, lineWidthForDrawing)
+
+
 def OverlayBeliefOnImage(img, beliefs, name, path="", factor=0.7, grid=3,
                          norm_belief=True):
     """ python
@@ -153,7 +151,9 @@ def OverlayBeliefOnImage(img, beliefs, name, path="", factor=0.7, grid=3,
     save_image(belief_imgs, "{}{}".format(path, name),
                mean=0, std=1, nrow=grid)
 
+
 irange = range
+
 
 def make_grid(tensor, nrow=8, padding=2,
               normalize=False, range=None, scale_each=False, pad_value=0):
@@ -235,6 +235,7 @@ def make_grid(tensor, nrow=8, padding=2,
             k = k + 1
     return grid
 
+
 def save_image(tensor, filename, nrow=4, padding=2, mean=None, std=None):
     """
     Saves a given Tensor into an image file.
@@ -251,6 +252,7 @@ def save_image(tensor, filename, nrow=4, padding=2, mean=None, std=None):
     im = Image.fromarray(ndarr)
     im.save(filename)
 
+
 def run_dope_node(params, freq=5, overlaybelief=False):
     '''Starts ROS node to listen to image topic, run DOPE, and publish DOPE results'''
 
@@ -264,13 +266,13 @@ def run_dope_node(params, freq=5, overlaybelief=False):
     draw_colors = {}
 
     # Initialize parameters
-    matrix_camera = np.zeros((3,3))
-    matrix_camera[0,0] = params["camera_settings"]['fx']
-    matrix_camera[1,1] = params["camera_settings"]['fy']
-    matrix_camera[0,2] = params["camera_settings"]['cx']
-    matrix_camera[1,2] = params["camera_settings"]['cy']
-    matrix_camera[2,2] = 1
-    dist_coeffs = np.zeros((4,1))
+    matrix_camera = np.zeros((3, 3))
+    matrix_camera[0, 0] = params["camera_settings"]['fx']
+    matrix_camera[1, 1] = params["camera_settings"]['fy']
+    matrix_camera[0, 2] = params["camera_settings"]['cx']
+    matrix_camera[1, 2] = params["camera_settings"]['cy']
+    matrix_camera[2, 2] = 1
+    dist_coeffs = np.zeros((4, 1))
 
     if "dist_coeffs" in params["camera_settings"]:
         dist_coeffs = np.array(params["camera_settings"]['dist_coeffs'])
@@ -285,24 +287,37 @@ def run_dope_node(params, freq=5, overlaybelief=False):
     config_detect.sigma = params['sigma']
     config_detect.thresh_points = params["thresh_points"]
 
-
     # search all the light field images
     print(matrix_camera)
     img_path = []
-    for root, dirnames, filenames in os.walk(params['image_folder']):
-        for filename in fnmatch.filter(filenames,params['image_format']):
-            img_path.append(os.path.join(root, filename))
+    lfimg_path = []
+    # for root, dirnames, filenames in os.walk(params['image_folder']):
+    #     for filename in fnmatch.filter(filenames,params['image_format']):
+    #         img_path.append(os.path.join(root, filename))
     # print(img_path)
+    # if input_lf:
+    for root, dirnames, filenames in os.walk(params['image_folder']):
+        for filename in fnmatch.filter(filenames, params['image_format']):
+            imgpath = os.path.join(root, filename)
+            if exists(imgpath.replace("CV.jpg", "LF.jpg")):
+                img_path.append(imgpath)
+                lfimg_path.append(imgpath.replace("CV.jpg", "LF.jpg"))
+    # print(lfimg_path)
+    # else:
+    #     for root, dirnames, filenames in os.walk(params['image_folder']):
+    #         for filename in fnmatch.filter(filenames,params['image_format']):
+    #             imgpath = os.path.join(root, filename)
+    #             img_path.append(imgpath)
 
     # For each object to detect, load network model, create PNP solver, and start ROS publishers
     for model in params['weights']:
-        models[model] =\
+        models[model] = \
             ModelData(
-                model, 
+                model,
                 g_path2package + "/weights/" + params['weights'][model]
             )
         models[model].load_net_model()
-        
+
         draw_colors[model] = \
             tuple(params["draw_colors"][model])
         pnp_solvers[model] = \
@@ -312,52 +327,38 @@ def run_dope_node(params, freq=5, overlaybelief=False):
                 Cuboid3d(params['dimensions'][model]),
                 dist_coeffs=dist_coeffs
             )
-        # pubs[model] = \
-        #     rospy.Publisher(
-        #         '{}/pose_{}'.format(params['topic_publishing'], model),
-        #         PoseStamped,
-        #         queue_size=10
-        #     )
-        # pub_dimension[model] = \
-        #     rospy.Publisher(
-        #         '{}/dimension_{}'.format(params['topic_publishing'], model),
-        #         String,
-        #         queue_size=10
-        #     )
-
-    # Start ROS publisher
-    # pub_rgb_dope_points = \
-    #     rospy.Publisher(
-    #         params['topic_publishing']+"/rgb_points", 
-    #         ImageSensor_msg, 
-    #         queue_size=10
-    #     )
-    
-    # Starts ROS listener
-    # rospy.Subscriber(
-    #     topic_cam, 
-    #     ImageSensor_msg, 
-    #     __image_callback
-    # )
-
-    # Initialize ROS node
+    #     pubs[model] = \
+    #         rospy.Publisher(
+    #             '{}/pose_{}'.format(params['topic_publishing'], model),
+    #             PoseStamped,
+    #             queue_size=10
+    #         )
+    #     pub_dimension[model] = \
+    #         rospy.Publisher(
+    #             '{}/dimension_{}'.format(params['topic_publishing'], model),
+    #             String,
+    #             queue_size=10
+    #         )
+    #
+    # # Initialize ROS node
     # rospy.init_node('dope_save_to_file', anonymous=True)
     # rate = rospy.Rate(freq)
 
-    print ("Running DOPE...  (Processing the folder: '{}')".format(params['image_folder'])) 
-    print ("Ctrl-C to stop")
+    print("Running DOPE...  (Processing the folder: '{}')".format(params['image_folder']))
+    print("Ctrl-C to stop")
 
     # while not rospy.is_shutdown():
-        # if g_img is not None:
-    for sub_ap_img in img_path:
-        print(sub_ap_img)
+    # if g_img is not None:
+    for sub_ap_img, lf_img in zip(img_path, lfimg_path):
         # Copy and draw image
 
-        # g_img = cv2.imread(sub_ap_img)
-        # g_img = cv2.cvtColor(g_img, cv2.COLOR_RGB2BGR)
+        g_img = cv2.imread(sub_ap_img)
+        g_lf_img = cv2.imread(lf_img)
+        g_img = cv2.cvtColor(g_img, cv2.COLOR_RGB2BGR)
+        g_lf_img = cv2.cvtColor(g_lf_img, cv2.COLOR_RGB2BGR)
 
-        g_img = cv2.imread(sub_ap_img,cv2.IMREAD_GRAYSCALE)
-        g_img = cv2.cvtColor(g_img,cv2.COLOR_GRAY2BGR)
+        # g_img = cv2.imread(sub_ap_img,cv2.IMREAD_GRAYSCALE)
+        # g_img = cv2.cvtColor(g_img,cv2.COLOR_GRAY2BGR)
         img_copy = g_img.copy()
         im = Image.fromarray(img_copy)
         g_draw = ImageDraw.Draw(im)
@@ -365,16 +366,15 @@ def run_dope_node(params, freq=5, overlaybelief=False):
         for m in models:
             # Detect object
             if overlaybelief:
-                belief_tensor, img_tensor = ObjectDetector.retrive_belief_map(models[m].net, g_img)
+                belief_tensor, img_tensor = ObjectDetector.lf_retrive_belief_map(models[m].net, g_img, g_lf_img)
                 OverlayBeliefOnImage(img_tensor, belief_tensor, name=(sub_ap_img[:-4] + 'beliefmap.png'), factor=0.5)
-
 
 
             else:
                 results = ObjectDetector.detect_object_in_image(
                     models[m].net,
                     pnp_solvers[m],
-                    g_img,
+                    g_lf_img,
                     config_detect
                 )
                 # Publish pose and overlay cube on image
@@ -389,7 +389,33 @@ def run_dope_node(params, freq=5, overlaybelief=False):
                         for pair in result['projected_points']:
                             points2d.append(tuple(pair))
                         DrawCube(points2d, draw_colors[m])
-            # cv2.imwrite(sub_ap_img[:-4] + 'result.png', cv2.cvtColor(np.array(im),cv2.COLOR_BGR2RGB))
+            cv2.imwrite(sub_ap_img[:-4] + 'result.png', cv2.cvtColor(np.array(im), cv2.COLOR_BGR2RGB))
+
+#
+# if __name__ == "__main__":
+#     '''Main routine to run DOPE'''
+#
+#     if len(sys.argv) > 1:
+#         config_name = sys.argv[1]
+#     else:
+#         config_name = "config_pose.yaml"
+#     rospack = rospkg.RosPack()
+#     params = None
+#     yaml_path = g_path2package + '/config/{}'.format(config_name)
+#     with open(yaml_path, 'r') as stream:
+#         try:
+#             print("Loading DOPE parameters from '{}'...".format(yaml_path))
+#             params = yaml.load(stream)
+#             print('    Parameters loaded.')
+#         except yaml.YAMLError as exc:
+#             print(exc)
+#
+#     topic_cam = params['topic_camera']
+#
+#     try:
+#         run_dope_node(params, overlaybelief=params['overlaybelief'])
+#     except rospy.ROSInterruptException:
+#         pass
 
 if __name__ == "__main__":
     '''Main routine to run DOPE'''

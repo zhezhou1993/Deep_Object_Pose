@@ -330,12 +330,24 @@ class ObjectDetector(object):
     def detect_object_in_image(net_model, pnp_solver, in_img, config):
         '''Detect objects in a image using a specific trained network model'''
 
+        angular_res = 5
+
         if in_img is None:
             return []
 
+        raw_image_3d = np.zeros((in_img.shape[2], angular_res ** 2,
+                                 in_img.shape[0] / angular_res,
+                                 in_img.shape[1] / angular_res))
+        # for k in range(3):  # divide r, g, b channels
+        for i in range(angular_res):
+            for j in range(angular_res):
+                raw_image_3d[:, i * angular_res + j] = in_img[i::5,j::5,:].transpose(2, 0, 1)
+        raw_image_3d = np.array(raw_image_3d, dtype=np.float32) / 255.0
+        raw_image_3d = torch.FloatTensor(raw_image_3d)
+
         # Run network inference
-        image_tensor = transform(in_img)
-        image_torch = Variable(image_tensor).cuda().unsqueeze(0)
+        # image_tensor = transform(in_img)
+        image_torch = Variable(raw_image_3d).cuda().unsqueeze(0)
         out, seg = net_model(image_torch)
         vertex2 = out[-1][0]
         aff = seg[-1][0]
