@@ -8,7 +8,18 @@ import fnmatch
 import os
 
 import numpy as np
+
+
 import cv2
+
+# import sys
+# ros_path = '/opt/ros/kinetic/lib/python2.7/dist-packages'
+# if ros_path in sys.path:
+#     sys.path.remove(ros_path)
+
+# import cv2
+
+# sys.path.append(ros_path)
 
 # import rospy
 # import rospkg
@@ -28,7 +39,7 @@ from os.path import exists, basename
 
 # Import DOPE code
 # rospack = rospkg.RosPack()
-g_path2package = '/home/alienicp/pose_estimation_ws/src/dope'
+g_path2package = '/home/cxt/Documents/research/lf_dope/Deep_Object_Pose'
 sys.path.append("{}/src/inference".format(g_path2package))
 from cuboid import *
 from lf_detector import *
@@ -347,6 +358,7 @@ def run_dope_node(params, freq=5, overlaybelief=False):
     print("Running DOPE...  (Processing the folder: '{}')".format(params['image_folder']))
     print("Ctrl-C to stop")
 
+    fp = open(params['image_folder'] + 'dope_stat.txt', 'w')
     # while not rospy.is_shutdown():
     # if g_img is not None:
     for sub_ap_img, lf_img in zip(img_path, lfimg_path):
@@ -369,7 +381,6 @@ def run_dope_node(params, freq=5, overlaybelief=False):
                 belief_tensor, img_tensor = ObjectDetector.lf_retrive_belief_map(models[m].net, g_img, g_lf_img)
                 OverlayBeliefOnImage(img_tensor, belief_tensor, name=(sub_ap_img[:-4] + 'beliefmap.png'), factor=0.5)
 
-
             else:
                 results = ObjectDetector.detect_object_in_image(
                     models[m].net,
@@ -381,7 +392,14 @@ def run_dope_node(params, freq=5, overlaybelief=False):
                 for i_r, result in enumerate(results):
                     if result["location"] is None:
                         continue
-                    print("have results!" + sub_ap_img)
+                    print("have results! " + sub_ap_img)
+
+                    # write pose result to stat.txt, format: obj_class x y z qw qx qy qz
+                    img_name = sub_ap_img[sub_ap_img.rfind('/')+1:-4]
+                    location = result['location']
+                    quaternion = result['quaternion']
+                    fp.write(img_name[:-2] + ' ' + result['name'] + ' ' + str(location[0]) + ' ' + str(location[1]) + ' ' + str(location[2])
+                             + ' ' + str(quaternion[0]) + ' ' + str(quaternion[1]) + ' ' + str(quaternion[2]) + ' ' + str(quaternion[3]) + '\n')
 
                     # Draw the cube
                     if None not in result['projected_points']:
@@ -391,6 +409,7 @@ def run_dope_node(params, freq=5, overlaybelief=False):
                         DrawCube(points2d, draw_colors[m])
             cv2.imwrite(sub_ap_img[:-4] + 'result.png', cv2.cvtColor(np.array(im), cv2.COLOR_BGR2RGB))
 
+    fp.close()
 #
 # if __name__ == "__main__":
 #     '''Main routine to run DOPE'''

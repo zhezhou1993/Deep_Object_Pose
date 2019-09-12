@@ -1,6 +1,6 @@
 topic_camera: "/dope/webcam_rgb_raw"
 topic_publishing: "dope"
-image_folder: "/home/alienicp/pose_estimation_ws/src/dope/train_tall_cup/test_real/"
+image_folder: "/home/cxt/Documents/research/lf_dope/lf_trans_dataset/dataset/benchmark_1704-1792+1968-2011/"
 image_format: "*CV.jpg"
 frame_id: "/dope"
 overlaybelief: False
@@ -15,7 +15,11 @@ weights: {
     # "foam_brick": "foam_brick_80.pth"
     # "t-slots": "t_slots_154.pth"
 #    "wine_cup": "single_wc_63.pth",
-     "tall_cup": "tall_cup_3lflayer_20.pth"
+     "tall_cup": "tall_cup_20.pth",
+     "wine_cup": "wine_cup_11.pth",
+     "glass_jar": "glass_jar_10.pth",
+     "cham_cup": "cham_cup_20.pth",
+     "starbucks": "starbucks_10.pth"
 }
 
 # Cuboid dimension in cm x,y,z
@@ -30,21 +34,23 @@ dimensions: {
     "t-slots": [3.17, 2.54, 3.81],
     "wine_cup": [8.55, 17.85, 8.55],
     "tall_cup": [9.8, 12.0, 9.8],
-    "glass_jar": [10.49, 10.69, 10.49]
+    "glass_jar": [10.49, 10.69, 10.49],
+    "cham_cup": [8.1, 10.5, 8.1],
+    "starbucks": [6.4, 15.3, 6.4]
 }
 
 draw_colors: {
-    "cracker": [13, 255, 128],  # green
-    "gelatin": [255, 255, 255],  # while
-    "meat": [0, 104, 255],  # blue
-    # "mustard": [217,12, 232],  # magenta
+    # "cracker": [13, 255, 128],  # green
+    # "gelatin": [255, 255, 255],  # while
+    "cham_cup": [0, 104, 255],  # blue
+    "starbucks": [217,12, 232],  # magenta
 #    "soup": [255, 101, 0],  # orange
-    "sugar": [232, 222, 12],  # yellow
-    "foam_brick": [255,0,0],
-    "t-slots": [0, 0, 255],
-    "wine_cup": [217,12, 232],
-    "tall_cup": [255, 101, 0],
-    "glass_jar": [255, 101, 0]
+    # "sugar": [232, 222, 12],  # yellow
+    # "foam_brick": [255,0,0],
+    # "t-slots": [0, 0, 255],
+    "wine_cup": [217,12, 232], # purple
+    "tall_cup": [255, 101, 0], # orange
+    "glass_jar": [0, 104, 255] # blue
 }
 
 # Camera intrinsics (Logitech C920)
@@ -86,6 +92,6 @@ camera_settings: {
 }
 # Config params for DOPE
 thresh_angle: 0.5
-thresh_map: 0.001
+thresh_map: 0.005
 sigma: 3
 thresh_points: 0.005
